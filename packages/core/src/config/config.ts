@@ -555,6 +555,8 @@ export interface ConfigParameters {
   };
   checkpointing?: boolean;
   proxy?: string;
+  oauthClientId?: string;
+  oauthClientSecret?: string;
   cwd: string;
   fileDiscoveryService?: FileDiscoveryService;
   includeDirectories?: string[];
@@ -720,6 +722,8 @@ export class Config implements McpContext, AgentLoopContext {
   private gitService: GitService | undefined = undefined;
   private readonly checkpointing: boolean;
   private readonly proxy: string | undefined;
+  private readonly oauthClientId: string | undefined;
+  private readonly oauthClientSecret: string | undefined;
   private readonly cwd: string;
   private readonly bugCommand: BugCommandSettings | undefined;
   private model: string;
@@ -951,6 +955,8 @@ export class Config implements McpContext, AgentLoopContext {
     };
     this.checkpointing = params.checkpointing ?? false;
     this.proxy = params.proxy;
+    this.oauthClientId = params.oauthClientId;
+    this.oauthClientSecret = params.oauthClientSecret;
     this.cwd = params.cwd ?? process.cwd();
     this.fileDiscoveryService = params.fileDiscoveryService ?? null;
     this.bugCommand = params.bugCommand;
@@ -2475,6 +2481,14 @@ export class Config implements McpContext, AgentLoopContext {
 
   getProxy(): string | undefined {
     return this.proxy;
+  }
+
+  getOauthClientId(): string | undefined {
+    return this.oauthClientId;
+  }
+
+  getOauthClientSecret(): string | undefined {
+    return this.oauthClientSecret;
   }
 
   getWorkingDir(): string {

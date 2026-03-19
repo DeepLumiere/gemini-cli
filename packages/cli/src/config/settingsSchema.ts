@@ -1734,6 +1734,30 @@ const SETTINGS_SCHEMA = {
             description: 'Whether to use an external authentication flow.',
             showInDialog: false,
           },
+          oauthClientId: {
+            type: 'string',
+            label: 'OAuth Client ID',
+            category: 'Security',
+            requiresRestart: true,
+            default: undefined as string | undefined,
+            description:
+              'Custom OAuth client ID for the Sign in with Google flow. ' +
+              'Overrides the default built-in client ID. ' +
+              'Useful for organization or per-project OAuth apps.',
+            showInDialog: false,
+          },
+          oauthClientSecret: {
+            type: 'string',
+            label: 'OAuth Client Secret',
+            category: 'Security',
+            requiresRestart: true,
+            default: undefined as string | undefined,
+            description:
+              'Custom OAuth client secret for the Sign in with Google flow. ' +
+              'Overrides the default built-in client secret. ' +
+              'Must be set together with oauthClientId.',
+            showInDialog: false,
+          },
         },
       },
       enableConseca: {

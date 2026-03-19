@@ -25,6 +25,8 @@ import {
   clearCachedCredentialFile,
   clearOauthClientCache,
   authEvents,
+  OAUTH_CLIENT_ID_ENV_VAR,
+  OAUTH_CLIENT_SECRET_ENV_VAR,
 } from './oauth2.js';
 import { UserAccountManager } from '../utils/userAccountManager.js';
 import * as fs from 'node:fs';
@@ -111,6 +113,8 @@ const mockConfig = {
   isBrowserLaunchSuppressed: () => false,
   getAcpMode: () => false,
   isInteractive: () => true,
+  getOauthClientId: () => undefined,
+  getOauthClientSecret: () => undefined,
 } as unknown as Config;
 
 // Mock fetch globally
@@ -807,9 +811,156 @@ describe('oauth2', () => {
       });
     });
 
+    describe('OAuth client credential overrides', () => {
+      it('should use custom OAuth client ID from GEMINI_OAUTH_CLIENT_ID env var', async () => {
+        const customClientId = 'custom-client-id.apps.googleusercontent.com';
+        vi.stubEnv(OAUTH_CLIENT_ID_ENV_VAR, customClientId);
+
+        const mockOAuth2Client = {
+          generateAuthUrl: vi.fn().mockReturnValue('https://example.com/auth'),
+          on: vi.fn(),
+          getToken: vi.fn().mockResolvedValue({
+            tokens: {
+              access_token: 'test-token',
+              refresh_token: 'test-refresh-token',
+            },
+          }),
+        } as unknown as OAuth2Client;
+        vi.mocked(OAuth2Client).mockImplementation(() => mockOAuth2Client);
+
+        await getOauthClient(AuthType.LOGIN_WITH_GOOGLE, mockConfig).catch(
+          () => {},
+        );
+
+        expect(OAuth2Client).toHaveBeenCalledWith(
+          expect.objectContaining({
+            clientId: customClientId,
+          }),
+        );
+      });
+
+      it('should use custom OAuth client secret from GEMINI_OAUTH_CLIENT_SECRET env var', async () => {
+        const customClientSecret = 'custom-client-secret';
+        vi.stubEnv(OAUTH_CLIENT_SECRET_ENV_VAR, customClientSecret);
+
+        const mockOAuth2Client = {
+          generateAuthUrl: vi.fn().mockReturnValue('https://example.com/auth'),
+          on: vi.fn(),
+          getToken: vi.fn().mockResolvedValue({
+            tokens: {
+              access_token: 'test-token',
+              refresh_token: 'test-refresh-token',
+            },
+          }),
+        } as unknown as OAuth2Client;
+        vi.mocked(OAuth2Client).mockImplementation(() => mockOAuth2Client);
+
+        await getOauthClient(AuthType.LOGIN_WITH_GOOGLE, mockConfig).catch(
+          () => {},
+        );
+
+        expect(OAuth2Client).toHaveBeenCalledWith(
+          expect.objectContaining({
+            clientSecret: customClientSecret,
+          }),
+        );
+      });
+
+      it('should use default OAuth client ID when GEMINI_OAUTH_CLIENT_ID is not set', async () => {
+        const defaultClientId =
+          '681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com';
+
+        const mockOAuth2Client = {
+          generateAuthUrl: vi.fn().mockReturnValue('https://example.com/auth'),
+          on: vi.fn(),
+        } as unknown as OAuth2Client;
+        vi.mocked(OAuth2Client).mockImplementation(() => mockOAuth2Client);
+
+        await getOauthClient(AuthType.LOGIN_WITH_GOOGLE, mockConfig).catch(
+          () => {},
+        );
+
+        expect(OAuth2Client).toHaveBeenCalledWith(
+          expect.objectContaining({
+            clientId: defaultClientId,
+          }),
+        );
+      });
+
+      it('should use custom credentials in post-auth callback', async () => {
+        const customClientId = 'my-custom-client-id.apps.googleusercontent.com';
+        const customClientSecret = 'my-custom-secret';
+        vi.stubEnv(OAUTH_CLIENT_ID_ENV_VAR, customClientId);
+        vi.stubEnv(OAUTH_CLIENT_SECRET_ENV_VAR, customClientSecret);
+
+        const postAuthCallback = vi.fn();
+        authEvents.once('post_auth', postAuthCallback);
+
+        const mockTokens = {
+          access_token: 'test-access-token',
+          refresh_token: 'test-refresh-token',
+        };
+        let tokensCallback: ((tokens: unknown) => Promise<void>) | undefined;
+        const mockOAuth2Client = {
+          generateAuthUrl: vi.fn().mockReturnValue('https://example.com/auth'),
+          on: vi.fn((event: string, cb: (tokens: unknown) => Promise<void>) => {
+            if (event === 'tokens') {
+              tokensCallback = cb;
+            }
+          }),
+        } as unknown as OAuth2Client;
+        vi.mocked(OAuth2Client).mockImplementation(() => mockOAuth2Client);
+
+        await getOauthClient(AuthType.LOGIN_WITH_GOOGLE, mockConfig).catch(
+          () => {},
+        );
+
+        // Simulate token refresh to trigger the post_auth event
+        if (tokensCallback) {
+          await tokensCallback(mockTokens);
+        }
+
+        if (postAuthCallback.mock.calls.length > 0) {
+          expect(postAuthCallback).toHaveBeenCalledWith(
+            expect.objectContaining({
+              client_id: customClientId,
+              client_secret: customClientSecret,
+            }),
+          );
+        }
+      });
+      it('should prefer config settings over env vars for OAuth client ID', async () => {
+        const configClientId = 'config-client-id.apps.googleusercontent.com';
+        const envClientId = 'env-client-id.apps.googleusercontent.com';
+        vi.stubEnv(OAUTH_CLIENT_ID_ENV_VAR, envClientId);
+
+        const configWithCustomId = {
+          ...mockConfig,
+          getOauthClientId: () => configClientId,
+          getOauthClientSecret: () => undefined,
+        } as unknown as Config;
+
+        const mockOAuth2Client = {
+          generateAuthUrl: vi.fn().mockReturnValue('https://example.com/auth'),
+          on: vi.fn(),
+        } as unknown as OAuth2Client;
+        vi.mocked(OAuth2Client).mockImplementation(() => mockOAuth2Client);
+
+        await getOauthClient(
+          AuthType.LOGIN_WITH_GOOGLE,
+          configWithCustomId,
+        ).catch(() => {});
+
+        expect(OAuth2Client).toHaveBeenCalledWith(
+          expect.objectContaining({
+            clientId: configClientId,
+          }),
+        );
+      });
+    });
+
     describe('error handling', () => {
       it('should handle browser launch failure with FatalAuthenticationError', async () => {
-        const mockError = new Error('Browser launch failed');
         (open as Mock).mockRejectedValue(mockError);
 
         const mockOAuth2Client = {

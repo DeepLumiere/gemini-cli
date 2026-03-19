@@ -70,6 +70,98 @@ when you meet at least one of the following conditions:
 
 For instructions, see [Set your Google Cloud Project](#set-gcp).
 
+## Use a custom OAuth app <a id="custom-oauth"></a>
+
+By default, Gemini CLI uses a built-in Google OAuth app for the
+[Sign in with Google](#login-google) flow. You can override this with your own
+OAuth client credentials — for example, to comply with your organization's IT
+policy or to isolate usage under a specific Google Cloud project.
+
+> **Note:** Both `GEMINI_OAUTH_CLIENT_ID` and `GEMINI_OAUTH_CLIENT_SECRET` (or
+> their settings-file equivalents) must be set together. Setting only one of
+> them has no effect.
+
+### Method 1: Environment variables
+
+Set the `GEMINI_OAUTH_CLIENT_ID` and `GEMINI_OAUTH_CLIENT_SECRET` environment
+variables before starting Gemini CLI:
+
+**macOS/Linux**
+
+```bash
+export GEMINI_OAUTH_CLIENT_ID="YOUR_CLIENT_ID.apps.googleusercontent.com"
+export GEMINI_OAUTH_CLIENT_SECRET="YOUR_CLIENT_SECRET"
+```
+
+**Windows (PowerShell)**
+
+```powershell
+$env:GEMINI_OAUTH_CLIENT_ID="YOUR_CLIENT_ID.apps.googleusercontent.com"
+$env:GEMINI_OAUTH_CLIENT_SECRET="YOUR_CLIENT_SECRET"
+```
+
+To make these settings persistent, see
+[Persisting Environment Variables](#persisting-vars).
+
+### Method 2: Settings file (`~/.gemini/settings.json`)
+
+Add the credentials to your user-wide settings file:
+
+```json
+{
+  "security": {
+    "auth": {
+      "oauthClientId": "YOUR_CLIENT_ID.apps.googleusercontent.com",
+      "oauthClientSecret": "YOUR_CLIENT_SECRET"
+    }
+  }
+}
+```
+
+### Per-folder / per-project configuration
+
+You can use different OAuth credentials in different project folders — for
+example, to have a work project authenticate under your company's OAuth app
+while personal projects use the default.
+
+Gemini CLI automatically discovers settings by walking upward from the current
+directory, picking up the closest `.gemini/settings.json` and `.gemini/.env`
+files it finds. This means a project folder can carry its own credentials
+independently of your home directory settings.
+
+**Option A — `.gemini/.env` file in the project folder:**
+
+```bash
+# /path/to/your/project/.gemini/.env
+GEMINI_OAUTH_CLIENT_ID="YOUR_CLIENT_ID.apps.googleusercontent.com"
+GEMINI_OAUTH_CLIENT_SECRET="YOUR_CLIENT_SECRET"
+```
+
+**Option B — `.gemini/settings.json` file in the project folder:**
+
+```json
+{
+  "security": {
+    "auth": {
+      "oauthClientId": "YOUR_CLIENT_ID.apps.googleusercontent.com",
+      "oauthClientSecret": "YOUR_CLIENT_SECRET"
+    }
+  }
+}
+```
+
+### Reverting to the built-in OAuth app
+
+To go back to the default built-in OAuth app, remove or unset the custom values:
+
+- **Environment variables:**
+  `unset GEMINI_OAUTH_CLIENT_ID GEMINI_OAUTH_CLIENT_SECRET` (macOS/Linux) or
+  `Remove-Item Env:\GEMINI_OAUTH_CLIENT_ID, Env:\GEMINI_OAUTH_CLIENT_SECRET`
+  (Windows PowerShell).
+- **Settings file:** Delete the `oauthClientId` and `oauthClientSecret` fields
+  (or the entire `security.auth` block) from `~/.gemini/settings.json` or the
+  project-level `.gemini/settings.json`.
+
 ## Use Gemini API key <a id="gemini-api"></a>
 
 If you don't want to authenticate using your Google account, you can use an API
