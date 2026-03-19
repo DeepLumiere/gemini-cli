@@ -812,35 +812,10 @@ describe('oauth2', () => {
     });
 
     describe('OAuth client credential overrides', () => {
-      it('should use custom OAuth client ID from GEMINI_OAUTH_CLIENT_ID env var', async () => {
+      it('should use custom OAuth client ID and secret from env vars', async () => {
         const customClientId = 'custom-client-id.apps.googleusercontent.com';
-        vi.stubEnv(OAUTH_CLIENT_ID_ENV_VAR, customClientId);
-
-        const mockOAuth2Client = {
-          generateAuthUrl: vi.fn().mockReturnValue('https://example.com/auth'),
-          on: vi.fn(),
-          getToken: vi.fn().mockResolvedValue({
-            tokens: {
-              access_token: 'test-token',
-              refresh_token: 'test-refresh-token',
-            },
-          }),
-        } as unknown as OAuth2Client;
-        vi.mocked(OAuth2Client).mockImplementation(() => mockOAuth2Client);
-
-        await getOauthClient(AuthType.LOGIN_WITH_GOOGLE, mockConfig).catch(
-          () => {},
-        );
-
-        expect(OAuth2Client).toHaveBeenCalledWith(
-          expect.objectContaining({
-            clientId: customClientId,
-          }),
-        );
-      });
-
-      it('should use custom OAuth client secret from GEMINI_OAUTH_CLIENT_SECRET env var', async () => {
         const customClientSecret = 'custom-client-secret';
+        vi.stubEnv(OAUTH_CLIENT_ID_ENV_VAR, customClientId);
         vi.stubEnv(OAUTH_CLIENT_SECRET_ENV_VAR, customClientSecret);
 
         const mockOAuth2Client = {
@@ -861,12 +836,37 @@ describe('oauth2', () => {
 
         expect(OAuth2Client).toHaveBeenCalledWith(
           expect.objectContaining({
+            clientId: customClientId,
             clientSecret: customClientSecret,
           }),
         );
       });
 
-      it('should use default OAuth client ID when GEMINI_OAUTH_CLIENT_ID is not set', async () => {
+      it('should fall back to defaults when only GEMINI_OAUTH_CLIENT_ID is set', async () => {
+        const defaultClientId =
+          '681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com';
+        vi.stubEnv(OAUTH_CLIENT_ID_ENV_VAR, 'orphan-client-id');
+        // GEMINI_OAUTH_CLIENT_SECRET intentionally not set
+
+        const mockOAuth2Client = {
+          generateAuthUrl: vi.fn().mockReturnValue('https://example.com/auth'),
+          on: vi.fn(),
+        } as unknown as OAuth2Client;
+        vi.mocked(OAuth2Client).mockImplementation(() => mockOAuth2Client);
+
+        await getOauthClient(AuthType.LOGIN_WITH_GOOGLE, mockConfig).catch(
+          () => {},
+        );
+
+        // Partial config falls back to defaults so credentials stay consistent
+        expect(OAuth2Client).toHaveBeenCalledWith(
+          expect.objectContaining({
+            clientId: defaultClientId,
+          }),
+        );
+      });
+
+      it('should use default OAuth credentials when neither env var is set', async () => {
         const defaultClientId =
           '681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com';
 
@@ -929,15 +929,18 @@ describe('oauth2', () => {
           );
         }
       });
-      it('should prefer config settings over env vars for OAuth client ID', async () => {
+      it('should prefer config settings over env vars for OAuth credentials', async () => {
         const configClientId = 'config-client-id.apps.googleusercontent.com';
+        const configClientSecret = 'config-client-secret';
         const envClientId = 'env-client-id.apps.googleusercontent.com';
+        const envClientSecret = 'env-client-secret';
         vi.stubEnv(OAUTH_CLIENT_ID_ENV_VAR, envClientId);
+        vi.stubEnv(OAUTH_CLIENT_SECRET_ENV_VAR, envClientSecret);
 
-        const configWithCustomId = {
+        const configWithCustomCredentials = {
           ...mockConfig,
           getOauthClientId: () => configClientId,
-          getOauthClientSecret: () => undefined,
+          getOauthClientSecret: () => configClientSecret,
         } as unknown as Config;
 
         const mockOAuth2Client = {
@@ -948,12 +951,13 @@ describe('oauth2', () => {
 
         await getOauthClient(
           AuthType.LOGIN_WITH_GOOGLE,
-          configWithCustomId,
+          configWithCustomCredentials,
         ).catch(() => {});
 
         expect(OAuth2Client).toHaveBeenCalledWith(
           expect.objectContaining({
             clientId: configClientId,
+            clientSecret: configClientSecret,
           }),
         );
       });
@@ -961,7 +965,18 @@ describe('oauth2', () => {
 
     describe('error handling', () => {
       it('should handle browser launch failure with FatalAuthenticationError', async () => {
+        const mockError = new Error('Browser launch failed');
         (open as Mock).mockRejectedValue(mockError);
+        vi.spyOn(crypto, 'randomBytes').mockReturnValue('mockedstate' as never);
+
+        const mockHttpServer = {
+          listen: vi.fn(),
+          close: vi.fn(),
+          on: vi.fn(),
+        };
+        (http.createServer as Mock).mockImplementation(
+          () => mockHttpServer as unknown as http.Server,
+        );
 
         const mockOAuth2Client = {
           generateAuthUrl: vi.fn().mockReturnValue('https://example.com/auth'),

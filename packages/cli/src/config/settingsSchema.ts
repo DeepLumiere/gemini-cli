@@ -1743,7 +1743,7 @@ const SETTINGS_SCHEMA = {
             description:
               'Custom OAuth client ID for the Sign in with Google flow. ' +
               'Overrides the default built-in client ID. ' +
-              'Useful for organization or per-project OAuth apps.',
+              'Must be set together with oauthClientSecret; setting only one has no effect.',
             showInDialog: false,
           },
           oauthClientSecret: {
@@ -1755,7 +1755,7 @@ const SETTINGS_SCHEMA = {
             description:
               'Custom OAuth client secret for the Sign in with Google flow. ' +
               'Overrides the default built-in client secret. ' +
-              'Must be set together with oauthClientId.',
+              'Must be set together with oauthClientId; setting only one has no effect.',
             showInDialog: false,
           },
         },

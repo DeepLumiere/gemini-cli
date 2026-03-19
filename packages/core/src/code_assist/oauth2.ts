@@ -54,9 +54,10 @@ export const authEvents = new EventEmitter();
 async function triggerPostAuthCallbacks(tokens: Credentials, config?: Config) {
   // Construct a JWTInput object to pass to callbacks, as this is the
   // type expected by the downstream Google Cloud client libraries.
+  const { clientId, clientSecret } = resolveOauthCredentials(config);
   const jwtInput: JWTInput = {
-    client_id: getOauthClientId(config),
-    client_secret: getOauthClientSecret(config),
+    client_id: clientId,
+    client_secret: clientSecret,
     refresh_token: tokens.refresh_token ?? undefined, // Ensure null is not passed
     type: 'authorized_user',
     client_email: userAccountManager.getCachedGoogleAccount() ?? undefined,
@@ -84,20 +85,38 @@ const DEFAULT_OAUTH_CLIENT_SECRET = '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';
 export const OAUTH_CLIENT_ID_ENV_VAR = 'GEMINI_OAUTH_CLIENT_ID';
 export const OAUTH_CLIENT_SECRET_ENV_VAR = 'GEMINI_OAUTH_CLIENT_SECRET';
 
-function getOauthClientId(config?: Config): string {
-  return (
-    config?.getOauthClientId() ||
-    process.env[OAUTH_CLIENT_ID_ENV_VAR] ||
-    DEFAULT_OAUTH_CLIENT_ID
-  );
-}
+/**
+ * Resolves the OAuth client ID and secret to use.
+ * Both values must be supplied together (via config or env vars) to avoid
+ * mixing a custom client ID with the default secret or vice-versa.
+ * If only one of the pair is provided the built-in defaults are used instead.
+ *
+ * @param config - Optional configuration object that may carry per-project
+ *   OAuth credentials set via the settings file.
+ * @returns An object containing the resolved `clientId` and `clientSecret`.
+ */
+function resolveOauthCredentials(config?: Config): {
+  clientId: string;
+  clientSecret: string;
+} {
+  const clientId =
+    config?.getOauthClientId() || process.env[OAUTH_CLIENT_ID_ENV_VAR];
+  const clientSecret =
+    config?.getOauthClientSecret() || process.env[OAUTH_CLIENT_SECRET_ENV_VAR];
 
-function getOauthClientSecret(config?: Config): string {
-  return (
-    config?.getOauthClientSecret() ||
-    process.env[OAUTH_CLIENT_SECRET_ENV_VAR] ||
-    DEFAULT_OAUTH_CLIENT_SECRET
-  );
+  if (clientId && clientSecret) {
+    return { clientId, clientSecret };
+  }
+  if (clientId || clientSecret) {
+    debugLogger.warn(
+      'Both GEMINI_OAUTH_CLIENT_ID and GEMINI_OAUTH_CLIENT_SECRET must be set together. ' +
+        'Falling back to built-in OAuth credentials.',
+    );
+  }
+  return {
+    clientId: DEFAULT_OAUTH_CLIENT_ID,
+    clientSecret: DEFAULT_OAUTH_CLIENT_SECRET,
+  };
 }
 
 // OAuth Scopes for Cloud Code authorization.
@@ -155,9 +174,10 @@ async function initOauthClient(
     }
   }
 
+  const { clientId, clientSecret } = resolveOauthCredentials(config);
   const client = new OAuth2Client({
-    clientId: getOauthClientId(config),
-    clientSecret: getOauthClientSecret(config),
+    clientId,
+    clientSecret,
     transporterOptions: {
       proxy: config.getProxy(),
     },

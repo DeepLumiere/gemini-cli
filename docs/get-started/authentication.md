@@ -78,8 +78,9 @@ OAuth client credentials — for example, to comply with your organization's IT
 policy or to isolate usage under a specific Google Cloud project.
 
 > **Note:** Both `GEMINI_OAUTH_CLIENT_ID` and `GEMINI_OAUTH_CLIENT_SECRET` (or
-> their settings-file equivalents) must be set together. Setting only one of
-> them has no effect.
+> their settings-file equivalents) must be set together. If only one is
+> provided, Gemini CLI falls back to its built-in credentials to prevent a
+> mismatched client ID / secret pair.
 
 ### Method 1: Environment variables
 
