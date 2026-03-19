@@ -51,12 +51,13 @@ import { getConsentForOauth } from '../utils/authConsent.js';
 
 export const authEvents = new EventEmitter();
 
-async function triggerPostAuthCallbacks(tokens: Credentials) {
+async function triggerPostAuthCallbacks(tokens: Credentials, config?: Config) {
   // Construct a JWTInput object to pass to callbacks, as this is the
   // type expected by the downstream Google Cloud client libraries.
+  const { clientId, clientSecret } = resolveOauthCredentials(config);
   const jwtInput: JWTInput = {
-    client_id: OAUTH_CLIENT_ID,
-    client_secret: OAUTH_CLIENT_SECRET,
+    client_id: clientId,
+    client_secret: clientSecret,
     refresh_token: tokens.refresh_token ?? undefined, // Ensure null is not passed
     type: 'authorized_user',
     client_email: userAccountManager.getCachedGoogleAccount() ?? undefined,
@@ -68,17 +69,55 @@ async function triggerPostAuthCallbacks(tokens: Credentials) {
 
 const userAccountManager = new UserAccountManager();
 
-//  OAuth Client ID used to initiate OAuth2Client class.
-const OAUTH_CLIENT_ID =
+//  Default OAuth Client ID used to initiate OAuth2Client class.
+const DEFAULT_OAUTH_CLIENT_ID =
   '681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com';
 
-// OAuth Secret value used to initiate OAuth2Client class.
+// Default OAuth Secret value used to initiate OAuth2Client class.
 // Note: It's ok to save this in git because this is an installed application
 // as described here: https://developers.google.com/identity/protocols/oauth2#installed
 // "The process results in a client ID and, in some cases, a client secret,
 // which you embed in the source code of your application. (In this context,
 // the client secret is obviously not treated as a secret.)"
-const OAUTH_CLIENT_SECRET = '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';
+const DEFAULT_OAUTH_CLIENT_SECRET = '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';
+
+// Environment variable names for overriding OAuth credentials.
+export const OAUTH_CLIENT_ID_ENV_VAR = 'GEMINI_OAUTH_CLIENT_ID';
+export const OAUTH_CLIENT_SECRET_ENV_VAR = 'GEMINI_OAUTH_CLIENT_SECRET';
+
+/**
+ * Resolves the OAuth client ID and secret to use.
+ * Both values must be supplied together (via config or env vars) to avoid
+ * mixing a custom client ID with the default secret or vice-versa.
+ * If only one of the pair is provided the built-in defaults are used instead.
+ *
+ * @param config - Optional configuration object that may carry per-project
+ *   OAuth credentials set via the settings file.
+ * @returns An object containing the resolved `clientId` and `clientSecret`.
+ */
+function resolveOauthCredentials(config?: Config): {
+  clientId: string;
+  clientSecret: string;
+} {
+  const clientId =
+    config?.getOauthClientId() || process.env[OAUTH_CLIENT_ID_ENV_VAR];
+  const clientSecret =
+    config?.getOauthClientSecret() || process.env[OAUTH_CLIENT_SECRET_ENV_VAR];
+
+  if (clientId && clientSecret) {
+    return { clientId, clientSecret };
+  }
+  if (clientId || clientSecret) {
+    debugLogger.warn(
+      'Both GEMINI_OAUTH_CLIENT_ID and GEMINI_OAUTH_CLIENT_SECRET must be set together. ' +
+        'Falling back to built-in OAuth credentials.',
+    );
+  }
+  return {
+    clientId: DEFAULT_OAUTH_CLIENT_ID,
+    clientSecret: DEFAULT_OAUTH_CLIENT_SECRET,
+  };
+}
 
 // OAuth Scopes for Cloud Code authorization.
 const OAUTH_SCOPE = [
@@ -135,9 +174,10 @@ async function initOauthClient(
     }
   }
 
+  const { clientId, clientSecret } = resolveOauthCredentials(config);
   const client = new OAuth2Client({
-    clientId: OAUTH_CLIENT_ID,
-    clientSecret: OAUTH_CLIENT_SECRET,
+    clientId,
+    clientSecret,
     transporterOptions: {
       proxy: config.getProxy(),
     },
@@ -162,7 +202,7 @@ async function initOauthClient(
       await cacheCredentials(tokens);
     }
 
-    await triggerPostAuthCallbacks(tokens);
+    await triggerPostAuthCallbacks(tokens, config);
   });
 
   if (credentials) {
@@ -186,7 +226,7 @@ async function initOauthClient(
           }
         }
         debugLogger.log('Loaded cached credentials.');
-        await triggerPostAuthCallbacks(credentials as Credentials);
+        await triggerPostAuthCallbacks(credentials as Credentials, config);
 
         return client;
       }
@@ -278,7 +318,7 @@ async function initOauthClient(
       );
     }
 
-    await triggerPostAuthCallbacks(client.credentials);
+    await triggerPostAuthCallbacks(client.credentials, config);
   } else {
     // In ACP mode, we skip the interactive consent and directly open the browser
     if (!config.getAcpMode()) {
@@ -384,7 +424,7 @@ async function initOauthClient(
       message: 'Authentication succeeded\n',
     });
 
-    await triggerPostAuthCallbacks(client.credentials);
+    await triggerPostAuthCallbacks(client.credentials, config);
   }
 
   return client;

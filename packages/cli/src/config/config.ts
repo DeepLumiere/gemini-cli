@@ -816,6 +816,12 @@ export async function loadCliConfig(
       process.env['https_proxy'] ||
       process.env['HTTP_PROXY'] ||
       process.env['http_proxy'],
+    oauthClientId:
+      settings.security?.auth?.oauthClientId ||
+      process.env['GEMINI_OAUTH_CLIENT_ID'],
+    oauthClientSecret:
+      settings.security?.auth?.oauthClientSecret ||
+      process.env['GEMINI_OAUTH_CLIENT_SECRET'],
     cwd,
     fileDiscoveryService: fileService,
     bugCommand: settings.advanced?.bugCommand,
